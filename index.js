@@ -219,6 +219,7 @@ app.get("/todos", auth, async function (req, res) {
   const todos = await TodoModel.find({
     userId,
   });
+  
   res.json({
     todos,
   });
