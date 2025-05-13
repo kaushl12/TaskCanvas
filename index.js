@@ -126,43 +126,90 @@ app.post("/signin", async function (req, res) {
 app.post("/todo", auth, async function (req, res) {
   try {
     const userId = req.userId;
-    const title = req.body.title;
-    const done = req.body.done || false;
-    const dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
-    // const updatedAt = new Date(); 
+    const { title, done = false, dueDate } = req.body;
 
+    if (!dueDate) {
+      return res.status(400).json({ error: "dueDate is required" });
+    }
 
-    // Create the new todo
-    await TodoModel.create({
+    const parsedDueDate = new Date(dueDate);
+    const now = new Date();
+
+    if (parsedDueDate < now) {
+      return res.status(400).json({ error: "Due date must be in the future" });
+    }
+
+    const newTodo = await TodoModel.create({
       userId,
       title,
-      dueDate,
+      dueDate: parsedDueDate,
       done,
     });
 
-    // Fetch all todos for this user
-    const todos = await TodoModel.find({ userId });
+    // Format response with local time
+    const formattedTodo = {
+      ...newTodo._doc,
+      dueDate: newTodo.dueDate.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true }),
+      createdAt: newTodo.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true }),
+    };
 
-    // Format dueDate and createdAt in IST (or your local time)
-    const formattedTodos = todos.map(todo => ({
-      ...todo._doc,
-      dueDate: todo.dueDate
-        ? todo.dueDate.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-        : null,
-      createdAt: todo.createdAt
-        ? todo.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-        : null,
-    }));
-
-    // Send response
     res.json({
       message: "Todo created successfully",
-      todos: formattedTodos,
+      todo: formattedTodo,
     });
 
   } catch (error) {
     console.error("Error creating todo:", error);
     res.status(500).json({ error: "Server error while creating todo" });
+  }
+});
+
+app.patch("/todo/edit/:id", auth, async function (req, res) {
+  try {
+    const todoId = req.params.id;
+    const userId = req.userId;
+    const { title, done, dueDate } = req.body;
+
+    const updateData = {};
+
+    if (title !== undefined) updateData.title = title;
+    if (done !== undefined) updateData.done = done;
+
+    if (dueDate !== undefined) {
+      const parsedDueDate = new Date(dueDate);
+      const now = new Date();
+
+      if (parsedDueDate < now) {
+        return res.status(400).json({ error: "Due date must be in the future" });
+      }
+
+      updateData.dueDate = parsedDueDate;
+    }
+
+    const todo = await TodoModel.findOne({ _id: todoId, userId });
+    if (!todo) {
+      return res.status(404).json({ message: "Todo not found or unauthorized" });
+    }
+
+    await TodoModel.updateOne({ _id: todoId }, updateData);
+
+    const updatedTodo = await TodoModel.findById(todoId);
+
+    const formattedUpdatedTodo = {
+      ...updatedTodo._doc,
+      dueDate: updatedTodo.dueDate?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true }),
+      createdAt: updatedTodo.createdAt?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true }),
+      updatedAt: updatedTodo.updatedAt?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true }),
+    };
+
+    res.json({
+      message: "Todo updated successfully",
+      todo: formattedUpdatedTodo,
+    });
+
+  } catch (err) {
+    console.error("Error updating todo:", err);
+    res.status(500).json({ message: "Error updating todo" });
   }
 });
 
@@ -178,42 +225,19 @@ app.get("/todos", auth, async function (req, res) {
 });
 
 
-app.patch("/todo/edit/:id",auth,async function(req,res){
-  try{
-    const todoId=req.params.id;
+
+app.delete('/todo/remove/:id',auth,async function(req,res){
+  const todoId=req.params.id;
     const userId = req.userId;
-    const title = req.body.title;
-    const done = req.body.done || false;
-    const dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
 
-    const updateData={};
-    if(title !== undefined) updateData.title=title;
-    if(dueDate !== undefined) updateData.dueDate=dueDate;
-    if(done !== undefined) updateData.done=done;
-
-    // Check if todo exists and belongs to this user
     const todo = await TodoModel.findOne({ _id: todoId, userId });
     if (!todo) {
       return res.status(404).json({ message: "Todo not found or unauthorized" });
     }
-    await TodoModel.updateOne({ _id: todoId }, updateData);
-
-    // Send updated todo back (optional)
-    const updatedTodo = await TodoModel.findById(todoId);
+    await TodoModel.deleteOne({ _id: todoId });
 
     res.json({
-      message: "Todo updated successfully",
-      todo: updatedTodo,
+      message: "Todo deleted successfully",
     });
+})
 
-
-  }catch(err){
-     console.error("Error updating todo:", err);
-    res.status(500).json({
-      message: "Error updating todo",
-    });
-  }
-    
-});
-
-app.listen(3000);

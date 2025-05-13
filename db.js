@@ -8,11 +8,11 @@ const User=new Schema({
     name: String
 })
 const Todo=new Schema({
-    title: String,
-    dueDate: Date,                                    
-    done: Boolean,
-    userId: { type: Schema.Types.ObjectId, ref: 'users' }
-},{ timestamps:true });
+     title: { type: String, required: true },
+  dueDate: { type: Date, required: true },
+  done: { type: Boolean, default: false },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "users", required: true },
+}, { timestamps: true });
 
 const UserModel=mongoose.model('users',User)
 const TodoModel=mongoose.model('todos',Todo)
